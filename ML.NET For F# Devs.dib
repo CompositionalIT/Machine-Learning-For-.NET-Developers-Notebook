@@ -1,0 +1,361 @@
+#!markdown
+
+# Load the data
+
+The CSV type provider seems to have issues with FSI so we have to provide the explicit path.
+
+#!fsharp
+
+// #i "nuget:https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet5/nuget/v3/index.json"
+// #i "nuget:https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-tools/nuget/v3/index.json"
+#r "nuget: FSharp.Data"
+#r "nuget: Plotly.NET, 2.0.0-beta9"
+#r "nuget: Plotly.NET.Interactive, 2.0.0-beta9"
+
+open FSharp.Data
+open Plotly.NET
+
+[<Literal>] 
+let path = "G:\Git Repos\C\CompositionalIT\ML Notebook\day.csv" // Have to update this to hard-coded local path for CSV provider
+type Data = CsvProvider<path>
+let dataset = Data.GetSample ()
+let allData = dataset.Rows
+
+#!markdown
+
+# Plot results
+
+Look at hire count by day to see if there are any obvious trends
+
+#!fsharp
+
+type Observation = Data.Row
+
+let plotObservationsByDay (fn : Observation -> float)  = Chart.Line [ for obs in allData -> obs.Instant, fn obs ]
+
+plotObservationsByDay (fun obs -> float obs.Cnt)
+
+#!markdown
+
+# Make a baseline prediction
+
+The simplest prediction is that we will always get the average.
+
+#!fsharp
+
+let average = allData |> Seq.averageBy (fun x -> float x.Cnt)
+
+average
+
+#!markdown
+
+To find how accurate that is, we can calculate the average difference from that value.
+
+This is the **mean absolute deviation** (MAD).
+
+#!fsharp
+
+let meanAbsDev = allData |> Seq.averageBy (fun x -> abs(float x.Cnt - average))
+
+meanAbsDev
+
+#!markdown
+
+# Basic model
+
+We can define a basic formula in the form
+
+`usage(t) = constant + t * increase rate`
+
+i.e. take a starting value and increase linearly over time.
+
+The data has an `Instant` property which is the days elapsed since the first observation.
+
+We can therefore define the straight line model more formally as
+
+**f<sub>0</sub> (obs) = Θ<sub>0</sub> + Θ<sub>1</sub> * obs.Instant**
+
+or "As time increases, how does usage change?"
+
+This is an example of a **linear regression model**.
+
+Each input variable gets its own indexed multiplier (Theta) - this is a **regression coefficient**.
+
+We predict by multiplying each variable by its coefficient and adding them together in a **linear combination**.
+
+#!fsharp
+
+type Model = Observation -> float
+
+let createModel (theta0, theta1) =
+    fun (obs : Observation) -> theta0 + theta1 * (float obs.Instant)
+
+#!markdown
+
+# Plot models vs actual
+
+Add the baseline 'always return the average' model and a random model to see how they fit 
+
+#!fsharp
+
+let model0 = createModel (average, 0.)
+let model1 = createModel (6000., -4.5)
+
+Chart.Combine [
+    plotObservationsByDay (fun obs -> float obs.Cnt)
+    plotObservationsByDay model0
+    plotObservationsByDay model1
+]
+
+#!markdown
+
+Now that we can create and display models, how do we rate them? We need to find the one that fits the data best.
+
+Another way to say that is we want the one with the smallest difference from reality, or the **lowest cost**.
+
+We can use the **euclidean distance** do get the cost of our models.
+
+#!fsharp
+
+let cost (data : Observation seq) (model : Model) =
+    data
+    |> Seq.sumBy (fun x -> pown (float x.Cnt - model x) 2)
+    |> sqrt
+
+#!markdown
+
+# Finding the Minimum of a Function with Gradient Descent
+
+Using Calculus to find the derivative of a function allows us to express the slope, or gradient, of a line at a given point.
+
+Some functions describe straight lines, such as
+
+#!fsharp
+
+let plotFunction f =
+    Seq.initInfinite (fun x -> x - 100)
+    |> Seq.take 200
+    |> Seq.map (fun x -> x, f x) 
+    |> Chart.Line
+
+plotFunction (fun x -> 3 * x - 7) // f'(x) = 3
+
+#!markdown
+
+Here, the derivative is 3 - that is, for 1 'unit' increase in x we should see a three-fold increase in y.
+
+Other functions describe a continually varying relationship between x and y at different values.
+
+#!fsharp
+
+plotFunction (fun x -> 2 * x * x - 8 * x + 1) // g'(x) = 4x - 8 = 4(x - 2) 
+
+#!markdown
+
+If the relationship changes from positive to negative at some point, this by definition means moving through a gradient of 0, which is called an **extremum**.
+
+It may be a maximum or minimum.
+
+#!markdown
+
+# Using Gradient Descent to fit a curve
+
+If we plot of the cost of potential parameter coefficients we can tune our model by
+
+- Increasing the importance of a parameter until doing so begins to increase its cost.
+- Reduce the importance of the parameter until again we see the cost start to increase.
+- Keep doing this, getting closer to the 'best' value.
+
+This is the called the **gradient descent algorithm**, as we are walking 'downhill' towards the bast value, a bit like a ball settling between two hills after oscillating back and forth a few times.
+
+In order to do that, we need to be able to calculate the gradient at any given point - this is the **derivative** of the cost.
+
+**x<sub>k+1</sub> = x<sub>k</sub> - α g'(x<sub>k</sub>)**
+
+i.e. to get a step closer to the target, take your current value and subtract a multiple (alpha) of the gradient at that point. 
+
+Alpha lets us tune the 'learning rate', i.e. how big a step downhill are we taking.
+
+#!fsharp
+
+let refineTheta1 learningRate theta0 theta1 (obs : Observation) =
+    let predicted = createModel (theta0, theta1) obs
+    let actual =  float obs.Cnt
+    let error = predicted - actual
+    let gradient = 2. * float obs.Instant * error
+    theta1 - learningRate * gradient
+
+#!markdown
+
+We can include as many parameters as we like. 
+
+Treat the constant `theta0` as a coefficient for a parameter that is always 1, and chain as many other params on as needed.
+
+For example, if we also had `theta2`, a coefficient for temperature, then its gradient descent function would be
+
+#!fsharp
+
+let refineTheta2 learningRate theta0 theta1 theta2 (obs : Observation) =
+    let param1 = float obs.Instant
+    let param2 = float obs.Temp
+    let predicted = theta0 * 1. + theta1 * param1 + theta2 * param2
+    let actual =  float obs.Cnt
+    let error = predicted - actual
+    let gradient = 2. * float obs.Temp * error
+    theta2 - learningRate * gradient
+
+#!markdown
+
+Returning to the single `Instant` parameter, we can create a simple implementation of the descent algorithm. 
+
+#!fsharp
+
+let update learningRate (theta0, theta1) (obs : Observation) =
+    let param1 = float obs.Instant
+    let predicted = theta0 + theta1 * param1
+    let actual = float obs.Cnt
+    let error = predicted - actual
+    let theta0' = theta0 - learningRate * 2. * 1. * error
+    let theta1' = theta1 - learningRate * 2. * param1 * error
+    theta0', theta1'
+
+#!markdown
+
+Now we can pick a starting prediction for theta0 and theta1 (zero in both cases) and fold over all the data points, refining the prediction at each step.
+
+#!fsharp
+
+let predictStochastic learningRate (theta0, theta1) =
+    ((theta0, theta1), allData)
+    ||> Seq.fold (fun (t0, t1) obs ->
+        update learningRate (t0, t1) obs)
+
+#!markdown
+
+Now the only question is what value to pick for the learning rate (alpha).
+
+#!fsharp
+
+let tune = [
+    for r in 1..20 do
+        let rate = pown 0.1 r
+        let cost = 
+            predictStochastic rate (0., 0.) 
+            |> createModel
+            |> cost allData
+        let state = sprintf "Learning rate: %.20f, Cost %.20f" rate cost
+        printfn "%s" state
+        rate, cost
+]
+
+#!markdown
+
+This shows that for larger values of alpha, we never converge on an answer. 
+
+For much smaller values, almost nothing changes.
+
+The best looks to be around 0.000,000,01, with a cost of about 59,367.
+
+We can now predict a value for theta and plot it to see how well it fits.
+
+#!fsharp
+
+let bestRate = pown 0.1 8
+let model2 = 
+    predictStochastic bestRate (0.0, 0.0)
+    |> createModel
+
+Chart.Combine [
+    plotObservationsByDay (fun obs -> float obs.Cnt)
+    plotObservationsByDay model2
+]
+
+#!markdown
+
+> Because different parameters are at different scales, they will often need to be rescaled to make them comparable, so that they each contribute to the adjustment by a reasonable amount. For instance here `param 0` is always 1, `param 1` (Instant) ranges from 0 to 700 ish and `param 2` (Temp) would maybe be -50 to + 50 degrees centigrade at most. This is why our starting value looks too low - `param 0` hasn't been given enough influence over the prediction.
+
+#!markdown
+
+If we plot the error after each data point updates the prediction, we can see how the accuracy evolves.
+
+#!fsharp
+
+let highRate = 10.0 * bestRate
+
+((0.0, 0.0), allData)
+||> Seq.scan (fun (t0, t1) obs -> update highRate (t0, t1) obs)
+|> Seq.mapi (fun i (t0, t1) -> 
+    let error = cost allData (createModel (t0, t1))
+    i, error)
+|> Chart.Line
+
+#!markdown
+
+We can see that the error decreases for a while, then increases for a while, then decreases again.
+
+The reason for this is that during the winter we get a consecutive set of far-below-average values, which makes the prediction drift, and it takes a while to correct itself.
+
+We can somewhat mitigate this by randomising the order of the values and decreasing the learning rate (`alpha`) over time, but there can always be things which cause these drifts.
+
+One way of addressing this is, rather than looking at one observation at a time, take the entire dataset into account.
+
+This is known as **batch** gradient descent (as opposed to the **stochastic** gradient descent we have been using).
+
+> Stochastic descent, whilst not perfect for the reasons just outlined, is useful in some circumstances - particularly when we receive observations over time, as it allows us to refine our prediction as each observation arrives rather than requiring the entire dataset up front. 
+>
+> This is known as **online learning**.
+
+#!markdown
+
+We just need to take the average error over the entire set of observations, rather than one observation at a time. We can then repeat this over and over again to refine.
+
+#!fsharp
+
+let batchUpdate learningRate (theta0, theta1) (data : Observation seq) =
+    let updates =
+        data
+        |> Seq.map (update learningRate (theta0, theta1))
+    let theta0' = updates |> Seq.averageBy fst
+    let theta1' = updates |> Seq.averageBy snd
+    theta0', theta1'
+
+let predictBatch learningRate iterCount =
+    let rec search (t0, t1) i =
+        if i = 0 then 
+            (t0, t1)
+        else
+            search (batchUpdate learningRate (t0, t1) allData) (i-1)
+    search (0.0, 0.0) iterCount  
+
+#!markdown
+
+If we plot the error rate as a function of iterations, we can see how much it fluctuates.
+
+#!fsharp
+
+let rate = 0.000001
+
+(0.0, 0.0)
+|> Seq.unfold (fun (t0, t1) ->
+    let (t0', t1') = batchUpdate rate (t0, t1) allData
+    let err = createModel (t0, t1) |> (cost allData)
+    Some (err, (t0', t1'))
+)
+|> Seq.mapi (fun i x -> i, x)
+|> Seq.take 100
+|> Seq.toList
+|> Chart.Line
+
+#!markdown
+
+This looks a lot better - the error slowly and steadily decreases over time until it reaches an optimum value.
+
+Batch gradient descent can be used wherever your cost function can be differentiated (to find the gradient) and and is convex.
+
+It is still not a perfect however.
+
+- We have to use the whole dataset, which could be an issue if it is large
+- We still have to manually tune the learning rate
+- A pass over the whole data set only gets us one refinement of our thetas, so we have repeat many times to work our way down the gradient towards a stable prediction.
+
+To improve things we need to move away from the concrete domain and look at the problem more generally, making use of some linear algebra.
