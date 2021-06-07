@@ -113,7 +113,7 @@ Now that we can create and display models, how do we rate them? We need to find 
 
 Another way to say that is we want the one with the smallest difference from reality, or the **lowest cost**.
 
-We can use the **euclidean distance** do get the cost of our models.
+We can use the **euclidean distance** to get the cost of our models.
 
 #!fsharp
 
@@ -166,7 +166,7 @@ If we plot of the cost of potential parameter coefficients we can tune our model
 - Reduce the importance of the parameter until again we see the cost start to increase.
 - Keep doing this, getting closer to the 'best' value.
 
-This is the called the **gradient descent algorithm**, as we are walking 'downhill' towards the bast value, a bit like a ball settling between two hills after oscillating back and forth a few times.
+This is the called the **gradient descent algorithm**, as we are walking 'downhill' towards the bast value, a bit like a ball settling between two hills, perhaps after oscillating back and forth a few times.
 
 In order to do that, we need to be able to calculate the gradient at any given point - this is the **derivative** of the cost.
 
@@ -205,6 +205,8 @@ let refineTheta2 learningRate theta0 theta1 theta2 (obs : Observation) =
     theta2 - learningRate * gradient
 
 #!markdown
+
+# Stochastic Gradient Descent
 
 Returning to the single `Instant` parameter, we can create a simple implementation of the descent algorithm. 
 
@@ -275,6 +277,8 @@ Chart.Combine [
 > Because different parameters are at different scales, they will often need to be rescaled to make them comparable, so that they each contribute to the adjustment by a reasonable amount. For instance here `param 0` is always 1, `param 1` (Instant) ranges from 0 to 700 ish and `param 2` (Temp) would maybe be -50 to + 50 degrees centigrade at most. This is why our starting value looks too low - `param 0` hasn't been given enough influence over the prediction.
 
 #!markdown
+
+# Batch Gradient Descent
 
 If we plot the error after each data point updates the prediction, we can see how the accuracy evolves.
 
@@ -356,6 +360,62 @@ It is still not a perfect however.
 
 - We have to use the whole dataset, which could be an issue if it is large
 - We still have to manually tune the learning rate
-- A pass over the whole data set only gets us one refinement of our thetas, so we have repeat many times to work our way down the gradient towards a stable prediction.
+- Because we haven't normalised our properties, we have to repeat many times to optimise theta 0.
 
 To improve things we need to move away from the concrete domain and look at the problem more generally, making use of some linear algebra.
+
+#!markdown
+
+# Linear Algebra
+
+So far we have defined our model as a series of properties and their coefficients 
+
+**Y = [ Θ<sub>0</sub>X<sub>0</sub> + Θ<sub>1</sub>X<sub>1</sub> ... Θ<sub>n</sub>X<sub>n</sub> ]**
+
+We could define Theta and X as two vectors
+
+**Θ = [ Θ<sub>1</sub>;Θ<sub>2</sub>;...Θ<sub>n</sub> ]**
+
+**X = [ X<sub>1</sub>;X<sub>2</sub>;...X<sub>n</sub> ]**
+
+Now the model can be simply stated as 
+
+**Y = Θ * X**
+
+> When operating on matrices, we can 
+> - add them (must be same size)
+> - transpose them (switch rows and cols)
+> - scalar multiply (all values by a constant)
+> - matrix multiply (must m1 cols count must match m2 row count)
+
+#!fsharp
+
+// dot product of two vectors =
+// [1 2 -5] · [4 -2 -1] = (1*4) + (3 * -2) + (-5 * -1) = 3
+
+//  [ row<sub>1</sub>     [ col<sub>1</sub>       [ row<sub>1</sub>  ·  col<sub>1</sub> ... row<sub>1</sub> · col<sub>n</sub>          
+//    ...              *    ...                 =   ...
+//    row<sub>m</sub> ]     col<sub>n</sub> ]       row<sub>m</sub>  ·  col<sub>1</sub> ... row<sub>m</sub> · col<sub>n</sub> ]
+
+#!markdown
+
+**The dot product of thetas and parameters is our predicted value for an observation**
+
+We can simplify the expression for calculating cost with the euclidean distance
+
+Cost(Θ) = 1/ n * [ (Y<sub>1</sub> - Θ * X<sub>1</sub>)<sup>2</sup> + ...  (Y<sub>N</sub> - Θ * X<sub>N</sub>)<sup>2</sup> ]
+
+This is for one parameter, and could form a vector of values, one for the cost of each observation. 
+
+If we were to do that for multiple parameters, it would form a matrix.
+
+We can take
+- the vector of observations at time T
+- the matrix of parameters at time T
+- the vector of predicted thetas
+
+Then, given the count of thetas is the same as the count of parameters, we can say
+
+**For each theta<sub>N</sub>, predict the cost for its parameter<sub>N</sub> at time<sub>T</sub> against observation<sub>T</sub>**
+
+This gives us a matrix of costs of each parameter over time with size N * T .
