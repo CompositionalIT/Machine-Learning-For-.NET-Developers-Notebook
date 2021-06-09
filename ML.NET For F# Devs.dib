@@ -122,6 +122,12 @@ let cost (data : Observation seq) (model : Model) =
     |> Seq.sumBy (fun x -> pown (float x.Cnt - model x) 2)
     |> sqrt
 
+cost allData model0
+
+#!fsharp
+
+cost allData model1
+
 #!markdown
 
 # Finding the Minimum of a Function with Gradient Descent
@@ -394,12 +400,12 @@ Now the model can be simply stated as
 // [1 2 -5] · [4 -2 -1] = (1*4) + (3 * -2) + (-5 * -1) = 3
 
 //  [ row<sub>1</sub>     [ col<sub>1</sub>       [ row<sub>1</sub>  ·  col<sub>1</sub> ... row<sub>1</sub> · col<sub>n</sub>          
-//    ...              *    ...                 =   ...
+//    ...               *   ...                 =   ...
 //    row<sub>m</sub> ]     col<sub>n</sub> ]       row<sub>m</sub>  ·  col<sub>1</sub> ... row<sub>m</sub> · col<sub>n</sub> ]
 
 #!markdown
 
-**The dot product of thetas and parameters is our predicted value for an observation**
+**The dot product of thetas and their associated parameters is our predicted value for an observation**.
 
 We can simplify the expression for calculating cost with the euclidean distance
 
@@ -416,6 +422,62 @@ We can take
 
 Then, given the count of thetas is the same as the count of parameters, we can say
 
-**For each theta<sub>N</sub>, predict the cost for its parameter<sub>N</sub> at time<sub>T</sub> against observation<sub>T</sub>**
+**Predict the cost of each theta<sub>N</sub> for its parameter<sub>N</sub> at time<sub>T</sub> against observation<sub>T</sub>**
 
-This gives us a matrix of costs of each parameter over time with size N * T .
+This maps the matrix of parameters into a matrix of costs with size N * T .
+
+# Linear Algebra in .Net
+
+We can use Math.Net to work with algebra
+
+#!fsharp
+
+#r "nuget: MathNet.Numerics"
+#r "nuget: MathNet.Numerics.FSharp"
+
+open MathNet
+open MathNet.Numerics.LinearAlgebra
+open MathNet.Numerics.LinearAlgebra.Double
+
+let A = vector [ 1.; 2.; 3. ]
+
+let B = matrix [ [ 1.; 2. ]
+                 [ 3.; 4. ]
+                 [ 5.; 6. ] ]
+
+let C = A * A
+let D = A * B
+let E = A * B.Column(1)
+
+[ string C; D.ToVectorString(); string E ]
+
+#!markdown
+
+Now we can implement our algorithm
+
+#!fsharp
+
+type Vctr = Vector<float>
+type Mtrx = Matrix<float>
+
+let cost (theta : Vctr) (Y : Vctr) (X: Mtrx) =
+    let costs = Y - (theta * X.Transpose())
+    costs * costs |> sqrt
+
+let predict (theta : Vctr) (parameters : Vctr) = 
+    theta * parameters
+
+let X = matrix [ for obs in allData -> [ 1.; float obs.Instant ] ]
+let Y = vector [ for obs in allData -> float obs.Cnt ]
+
+let theta = vector [ 6000.; -4.5 ] // Same values as model1 from earlier
+
+predict theta (X.Row(0))
+
+#!fsharp
+
+cost theta Y X
+
+#!markdown
+
+This cost agrees with our earlier value for model 1, so our abstraction is working.
