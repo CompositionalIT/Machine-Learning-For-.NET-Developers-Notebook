@@ -399,9 +399,9 @@ Now the model can be simply stated as
 // dot product of two vectors =
 // [1 2 -5] · [4 -2 -1] = (1*4) + (3 * -2) + (-5 * -1) = 3
 
-//  [ row<sub>1</sub>     [ col<sub>1</sub>       [ row<sub>1</sub>  ·  col<sub>1</sub> ... row<sub>1</sub> · col<sub>n</sub>          
+//  [ row1     [ col1       [ row1  ·  col1 ... row1 · coln         
 //    ...               *   ...                 =   ...
-//    row<sub>m</sub> ]     col<sub>n</sub> ]       row<sub>m</sub>  ·  col<sub>1</sub> ... row<sub>m</sub> · col<sub>n</sub> ]
+//    rowm ]     coln ]       rowm ·  col1 ... rowm · coln ]
 
 #!markdown
 
@@ -481,3 +481,24 @@ cost theta Y X
 #!markdown
 
 This cost agrees with our earlier value for model 1, so our abstraction is working.
+
+The next step is to find the best (or lowest cost) values for theta.
+
+# The Normal Equation
+
+The solution to the problem 
+
+**min cost (Θ) = 1/N * [ Y - Θ * X<sup>T</sup> ] * [ Y - Θ * X<sup>T</sup> ]**
+
+has a 'closed form', exact solution found using [normal form regression](https://www.geeksforgeeks.org/ml-normal-equation-in-linear-regression/#:~:text=Normal%20Equation%20is%20an%20analytical,a%20dataset%20with%20small%20features.) ( also see [this article](https://towardsdatascience.com/performing-linear-regression-using-the-normal-equation-6372ed3c57) and the [ML Wiki](http://mlwiki.org/index.php/Normal_Equation)).
+
+**Θ = (X<sup>T</sup> * X)<sup>-1</sup> * X<sup>T</sup> * Y**
+
+This can be used to save needing to go through the process of gradient descent, but it is only a solution to this specific algorithm (albeit a powerful one).
+
+Gradient descent is a more general algorithm and can be used on non-linear cost functions for example.
+
+#!fsharp
+
+let estimate  (Y : Vctr) (X : Mtrx) = 
+    (X.Transpose() * X).Inverse() * X.Transpose() * Y
