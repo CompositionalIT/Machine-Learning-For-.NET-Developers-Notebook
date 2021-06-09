@@ -502,3 +502,53 @@ Gradient descent is a more general algorithm and can be used on non-linear cost 
 
 let estimate  (Y : Vctr) (X : Mtrx) = 
     (X.Transpose() * X).Inverse() * X.Transpose() * Y
+
+#!markdown
+
+We are now in a position where we can fit any model, providing we can transform our observations into a vector of doubles.
+
+# Validating the model
+
+An important thing to remember is that **a good fit doesn't necessarily mean a good model**.
+
+It just means the model fits the training data, and adding any old parameter will at worst have no impact.
+
+The important thing is how does the model perform against data it has not seen before (was not trained on)?
+
+We can assess our model by training it on 70 % of the data and then checking it against the other 30%.
+
+> It is important to shuffle the data to remove order bias (such as season in the bike set)
+
+#!fsharp
+
+let random = Random(314159) // hard code seed to make results consistent between runs
+
+let shuffle (arr: 'a []) =
+    let arr = Array.copy arr
+    let l = arr.Length
+    for i in (l-1) .. -1 .. 1 do
+        let temp = arr.[i]
+        let j = random.Next(0, i+1)
+        arr.[i] <- arr.[j]
+        arr.[j] <- temp
+    arr
+
+let myArray = [| 1 .. 5 |]
+
+shuffle myArray
+
+#!fsharp
+
+let training, validation =
+    
+    let shuffled =
+        allData
+        |> Seq.toArray
+        |> shuffle
+    
+    let size = 
+        0.7 * float (Array.length shuffled) |> int
+    
+    shuffled.[..size], shuffled.[size+1..]
+
+training.Length, validation.Length
