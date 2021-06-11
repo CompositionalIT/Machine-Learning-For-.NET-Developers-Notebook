@@ -16,8 +16,8 @@ open FSharp.Data
 open Plotly.NET
 
 [<Literal>] 
-let path = "G:\Git Repos\C\CompositionalIT\ML Notebook\day.csv" // Have to update this to hard-coded local path for CSV provider
-type Data = CsvProvider<path>
+let Path = @"G:\Git Repos\C\CompositionalIT\ML Notebook\day.csv" // Have to update this to hard-coded local path for CSV provider
+type Data = CsvProvider<Path>
 let dataset = Data.GetSample ()
 let allData = dataset.Rows
 
@@ -31,7 +31,8 @@ Look at hire count by day to see if there are any obvious trends
 
 type Observation = Data.Row
 
-let plotObservationsByDay (fn : Observation -> float)  = Chart.Line [ for obs in allData -> obs.Instant, fn obs ]
+let plotObservationsByDay (fn : Observation -> float) =
+    Chart.Line [ for obs in allData -> obs.Instant, fn obs ]
 
 plotObservationsByDay (fun obs -> float obs.Cnt)
 
