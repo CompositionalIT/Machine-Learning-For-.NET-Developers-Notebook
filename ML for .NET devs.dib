@@ -9,8 +9,8 @@ The CSV type provider seems to have issues with FSI so we have to provide the ex
 // #i "nuget:https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet5/nuget/v3/index.json"
 // #i "nuget:https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-tools/nuget/v3/index.json"
 #r "nuget: FSharp.Data"
-#r "nuget: Plotly.NET, 2.0.0-beta9"
-#r "nuget: Plotly.NET.Interactive, 2.0.0-beta9"
+#r "nuget: Plotly.NET, 2.0.0-preview.2"
+#r "nuget: Plotly.NET.Interactive, 2.0.0-preview.2"
 
 open FSharp.Data
 open Plotly.NET
@@ -540,7 +540,7 @@ shuffle myArray
 
 #!fsharp
 
-let training, validation =
+let trainingData, validationData =
     
     let shuffled =
         allData
@@ -552,4 +552,110 @@ let training, validation =
     
     shuffled.[..size], shuffled.[size+1..]
 
-training.Length, validation.Length
+trainingData.Length, validationData.Length
+
+#!markdown
+
+In order to try different sets of features, we need a general function to extract them from a observation.
+
+If we can convert an observation to a set of features, we can combine those features with a vector of thetas (coefficients) to make a prediction.
+
+#!fsharp
+
+type Featuriser = Observation -> float list
+
+let predictor (f : Featuriser) (theta : Vctr) =
+  f >> vector >> (*) theta
+
+#!markdown
+
+To evaluate the performance of a model, we can find the mean average error (MAE) when assessed against each observation.
+
+#!fsharp
+
+let evaluate (model : Model) (data : Observation seq) =
+    data
+    |> Seq.averageBy (fun obs ->
+        abs (model obs - float obs.Cnt))
+
+#!markdown
+
+Now we can put this together into a model function.
+
+- Extract the feature vector we are predicting (**Y**, Cnt in our particular example).
+- Extract the matrix of features we want to inclue in our model (**X**, Instant in our particular example) using the featuriser.
+- Feed these into the estimating function in order to get predicted 'best' value for our parameter coefficients (**Theta**).
+- Use this value for theta, along with the featuriser, to create a prediction function.
+
+#!fsharp
+
+let createModel (featuriser : Featuriser) (data : Observation seq) =
+    
+    let Yt, Xt =
+        data
+        |> Seq.toList
+        |> List.map (fun obs -> float obs.Cnt, featuriser obs)
+        |> List.unzip
+    
+    let theta = estimate (vector Yt) (matrix Xt)
+    let predict = predictor featuriser theta
+
+    theta, predict
+
+#!markdown
+
+To test this function we can recreate our earlier model and see if it matches.
+
+#!fsharp
+
+let featuriser0 (obs : Observation) =
+    [ 1.0;
+      float obs.Instant ]
+
+let (theta0, model0) = createModel featuriser0 trainingData
+
+[ ("Training", evaluate model0 trainingData).ToDisplayString()
+  ("Validation", evaluate model0 validationData).ToDisplayString() ]
+
+#!fsharp
+
+Chart.Combine [
+    plotObservationsByDay (fun obs -> float obs.Cnt) 
+    plotObservationsByDay model0 
+]
+
+#!markdown
+
+We can feed in any number of features to see if we can improve our predictions.
+
+#!fsharp
+
+let featuriser1 (obs : Observation) =
+    [ 1.
+      float obs.Instant
+      float obs.Atemp
+      float obs.Hum
+      float obs.Temp
+      float obs.Windspeed ]
+
+let (theta, model1) = createModel featuriser1 trainingData
+
+[ ("Training", evaluate model1 trainingData).ToDisplayString()
+  ("Validation", evaluate model1 validationData).ToDisplayString() ]
+
+#!markdown
+
+We can see that the MAE has dropped for both the training and validation sets.
+
+#!fsharp
+
+Chart.Combine [
+    plotObservationsByDay (fun obs -> float obs.Cnt) 
+    plotObservationsByDay model1 
+]
+
+#!markdown
+
+The chart now sticks much more closely to the curve.
+
+If we plot the actual value against the predicted, a 45-degree line would mean that they were identical.
