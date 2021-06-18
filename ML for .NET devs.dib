@@ -658,4 +658,10 @@ Chart.Combine [
 
 The chart now sticks much more closely to the curve.
 
-If we plot the actual value against the predicted, a 45-degree line would mean that they were identical.
+If we plot the actual value against the predicted, a 45-degree line would mean that they were identical. 
+
+It looks like we have done well:
+
+#!fsharp
+
+Chart.Point [ for obs in allData -> float obs.Cnt, model1 obs ]
