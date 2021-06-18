@@ -870,7 +870,7 @@ Batch descent takes all observations into account for every refinement, so does 
 
 However it is slower as it operates on every observation with every refinement, which gets increasingly computationally expensive as time goes on.
 
-## Modelling
+## Modelling using linear regression
 
 Adding more features to a model often makes it much more accurate, but in turn adds to its complexity and often requires adjustments to prevent over-fitting.
 
