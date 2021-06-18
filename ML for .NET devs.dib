@@ -410,7 +410,7 @@ Now the model can be simply stated as
 
 We can simplify the expression for calculating cost with the euclidean distance
 
-Cost(Θ) = 1/ n * [ (Y<sub>1</sub> - Θ * X<sub>1</sub>)<sup>2</sup> + ...  (Y<sub>N</sub> - Θ * X<sub>N</sub>)<sup>2</sup> ]
+**Cost(Θ) = 1/ n * [ (Y<sub>1</sub> - Θ * X<sub>1</sub>)<sup>2</sup> + ...  (Y<sub>N</sub> - Θ * X<sub>N</sub>)<sup>2</sup> ]**
 
 This is for one parameter, and could form a vector of values, one for the cost of each observation. 
 
@@ -806,8 +806,74 @@ Chart.Combine [
     plotObservationsByDay model3 
 ]
 
+#!fsharp
+
+Chart.Point [ for obs in allData -> float obs.Cnt, model3 obs ]
+
 #!markdown
 
 This approach, using polynomials to relate parameters non-linear ways, is powerful but can introduce complexity, and makes the message the model is trying to communicate less clear.
 
 You can end up with a 'black box' algorithm, where nobody really knows how it works.
+
+# Regularisation
+
+If we throw a large number of parameters at our algorithm, it may suffer from **over fitting**, where non-representative artifacts in the data are captured.
+
+This means when we use data the algorithm hasn't seen before, it performs much worse than it did when fed the training data.
+
+One technique to combat this is regularisation.
+
+Here we penalise larger values for theta, under the assumption that extreme relationships are unlikely.
+
+This penalty scales exponentially to the value of theta
+
+**Penalty (Θ) = [Θ<sub>1</sub><sup>2</sup> .. Θ<sub>N</sub><sup>2</sup>]**
+
+We can combine this term with our original cost function to get
+
+**Cost(Θ) = 1/ n * [ (Y<sub>1</sub> - Θ * X<sub>1</sub>)<sup>2</sup> + ...  (Y<sub>N</sub> - Θ * X<sub>N</sub>)<sup>2</sup> ] + λ * [Θ<sub>1</sub><sup>2</sup> .. Θ<sub>N</sub><sup>2</sup>]**
+
+where λ is used to set the weight of the penalty.
+
+Now the cost of the model depends on two factors - the error of the prediction and the size of theta.
+
+# Normalisation
+
+If we want to compare the sizes of theta between parameters in a like-for-like way when calculating penalty terms, we need to make sure they are on the same scale.
+
+We can just rescale all parameters to between 0 and 1, using the formula
+
+**(x - xmin) / (xmax - xmin)**
+
+> There is no need to regularise theta 0, as it is a constant and serves as a baseline offset for everything else.
+
+# Conclusion
+
+## Gradient Descent
+
+Gradient descent is used in many areas of machine learning, wherever we need to identify parameters than minimise the value of a function.
+
+We do this by iteratively going 'downhill', or following the steepest gradient descent from the current value.
+
+We naturally calculate this gradient using calculus, which means the function does need to be differentiable and not too pathological.
+
+A great example of this is when we are trying to minimise some kind of distance or cost function.
+
+Stochastic and batch gradient descent each have their own advantages and drawbacks.
+
+Stochastic allows you to process one observation at a time and iterate quickly on the model.
+
+However it is susceptible to influence by unusual streams of observations which can throw it off course.
+
+Batch descent takes all observations into account for every refinement, so does not suffer in the same way.
+
+However it is slower as it operates on every observation with every refinement, which gets more computationally expensive as time goes on.
+
+## Modelling
+
+Adding more features to a model often makes it much more accurate, but in turn adds to its complexity and often requires adjustments to prevent over-fitting.
+
+Techniques to help with this are regularisation and normalisation.
+
+Features can have both linear and non-linear relationships, and be both scalar and categorical in nature.
