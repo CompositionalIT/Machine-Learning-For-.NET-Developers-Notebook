@@ -868,7 +868,7 @@ However it is susceptible to influence by unusual streams of observations which 
 
 Batch descent takes all observations into account for every refinement, so does not suffer in the same way.
 
-However it is slower as it operates on every observation with every refinement, which gets more computationally expensive as time goes on.
+However it is slower as it operates on every observation with every refinement, which gets increasingly computationally expensive as time goes on.
 
 ## Modelling
 
