@@ -665,3 +665,149 @@ It looks like we have done well:
 #!fsharp
 
 Chart.Point [ for obs in allData -> float obs.Cnt, model1 obs ]
+
+#!markdown
+
+# Categorical features
+
+What would we do if we wanted to include non-scalar parameters, such as day of the week?
+
+We could encode them as numbers, but there is no way to represent them as a magnitude. 
+
+Weekday is a **categorical** feature.
+
+There are techniques available to handle this type of feature
+
+We could try encoding each weekday as a boolean parameter.
+
+#!fsharp
+
+let featuriser2 (obs : Observation) =
+    [ 1.
+      float obs.Instant
+      float obs.Hum
+      float obs.Temp
+      float obs.Windspeed
+      if obs.Weekday = 0 then 1.0 else 0.0
+      if obs.Weekday = 1 then 1.0 else 0.0
+      if obs.Weekday = 2 then 1.0 else 0.0
+      if obs.Weekday = 3 then 1.0 else 0.0
+      if obs.Weekday = 4 then 1.0 else 0.0
+      if obs.Weekday = 5 then 1.0 else 0.0
+      if obs.Weekday = 6 then 1.0 else 0.0 ]
+
+let (theta2, model2) = createModel featuriser2 trainingData
+
+theta2
+
+#!markdown
+
+The values are coming back as NaNs. We are facing an issue known as **collinearity**.
+
+This happens when we have an infinite set of solutions with equal cost.
+
+The simplest example of this is includng the same parameter twice - any ratio of the parameters will have the same cost, and there are infinitely many ways to divide them.
+
+In this case, because parameter 0 is always 1.0, and there will always be exactly one weekday with value 1.0, again we find that there are infinite solutions.
+
+We can work around this issue by omitting a day of the week, which now acts as a 'day of reference' (how important is Monday compared to Sunday, how important is Tuesday compared to Sunday etc etc).
+This means the day of the week won't always be 1.0, and we avoid having infinite solutions.
+
+#!fsharp
+
+let featuriser2 (obs : Observation) =
+    [ 1.
+      float obs.Instant
+      float obs.Hum
+      float obs.Temp
+      float obs.Windspeed
+      if obs.Weekday = 1 then 1.0 else 0.0
+      if obs.Weekday = 2 then 1.0 else 0.0
+      if obs.Weekday = 3 then 1.0 else 0.0
+      if obs.Weekday = 4 then 1.0 else 0.0
+      if obs.Weekday = 5 then 1.0 else 0.0
+      if obs.Weekday = 6 then 1.0 else 0.0 ]
+
+let (theta2, model2) = createModel featuriser2 trainingData
+
+theta2
+
+#!fsharp
+
+Chart.Combine [
+    plotObservationsByDay (fun obs -> float obs.Cnt) 
+    plotObservationsByDay model2 
+]
+
+#!fsharp
+
+["Training", evaluate model2 trainingData; "Validation", evaluate model2 validationData;]
+
+#!markdown
+
+# Non-linear features
+
+Looking at temperature, we can see a different kind of relationship:
+
+#!fsharp
+
+Chart.Point [ for obs in allData -> obs.Temp, float obs.Cnt ]
+
+#!markdown
+
+As you might expect, this shows that hire activity goes up as it gets warmer, but then decreases as it gets uncomfortably hot.
+
+Rather than being linear, this looks like some kind of exponential relationship.
+
+If we try including the squared temperature, we get a better fit.
+
+#!fsharp
+
+let squareTempFeaturiser (obs : Observation) =
+    [ 1.
+      obs.Temp |> float 
+      obs.Temp * obs.Temp |> float  ]
+
+let (_, squareTempModel) = createModel squareTempFeaturiser allData
+
+Chart.Combine [
+    Chart.Point [ for obs in allData -> obs.Temp, float obs.Cnt ]
+    Chart.Point [ for obs in allData -> obs.Temp, squareTempModel obs ]
+]
+
+#!markdown
+
+Now we can combine this with the other parameters, and we see a big improvement.
+
+#!fsharp
+
+let featuriser3 (obs : Observation) =
+    [ 1.
+      float obs.Instant
+      float obs.Hum
+      float obs.Temp
+      obs.Temp * obs.Temp |> float
+      float obs.Windspeed
+      if obs.Weekday = 1 then 1.0 else 0.0
+      if obs.Weekday = 2 then 1.0 else 0.0
+      if obs.Weekday = 3 then 1.0 else 0.0
+      if obs.Weekday = 4 then 1.0 else 0.0
+      if obs.Weekday = 5 then 1.0 else 0.0
+      if obs.Weekday = 6 then 1.0 else 0.0 ]
+
+let (theta3, model3) = createModel featuriser3 trainingData
+
+["Training", evaluate model3 trainingData; "Validation", evaluate model3 validationData;]
+
+#!fsharp
+
+Chart.Combine [
+    plotObservationsByDay (fun obs -> float obs.Cnt) 
+    plotObservationsByDay model3 
+]
+
+#!markdown
+
+This approach, using polynomials to relate parameters non-linear ways, is powerful but can introduce complexity, and makes the message the model is trying to communicate less clear.
+
+You can end up with a 'black box' algorithm, where nobody really knows how it works.
