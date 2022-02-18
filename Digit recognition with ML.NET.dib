@@ -1,0 +1,158 @@
+#!markdown
+
+# Exercise 3, Part 1
+
+## Load data
+
+#!fsharp
+
+#r "nuget: Microsoft.ML"
+
+open Microsoft.ML
+open Microsoft.ML.Data
+open Microsoft.ML.Transforms
+open Microsoft.ML.Trainers
+
+[<Literal>] 
+let TRAIN_PATH = @"G:\Git Repos\C\CompositionalIT\ML Blog example\trainingsample.csv" 
+
+[<Literal>] 
+let TEST_PATH = @"G:\Git Repos\C\CompositionalIT\ML Blog example\validationsample.csv"
+
+#!markdown
+
+Define data input and prediction output models.
+
+Attributes can be used to select the CSV columns for each property.
+
+Names can be anything, the header is ignored on import.
+
+Output value names have been chosen to match [ML.NET defaults for One Vs All](https://docs.microsoft.com/en-us/dotnet/api/microsoft.ml.trainers.oneversusalltrainer?view=ml-dotnet). 
+
+They could be different, but then would need to add mapper to transform pipeline.
+
+#!fsharp
+
+[<CLIMutable>]
+type Digit = {
+    [<LoadColumn(0)>] Number : float32
+    [<LoadColumn(1, 784)>] [<VectorType(784)>] PixelValues : float32[]
+}
+
+[<CLIMutable>]
+type DigitPrediction = {
+    PredictedLabel : uint
+    Label : uint
+    Score : float32 []
+}
+
+let context = new MLContext()
+
+let trainData = context.Data.LoadFromTextFile<Digit>(TRAIN_PATH, hasHeader = true, separatorChar = ',')
+let testData = context.Data.LoadFromTextFile<Digit>(TEST_PATH, hasHeader = true, separatorChar = ',')
+
+#!markdown
+
+Create a model pipeline. 
+
+Either 
+- The input field `Number` must be mapped to a key called `Label`
+- The label field default needs to be set to `Number` instead of `Label`. 
+
+In this case we will do the former.
+
+Similarly, all features must either be
+- Combined into a collection called `Features`
+- Combined into a collection with a custom name if the default is updated
+
+In this case we will do the latter.
+
+#!fsharp
+
+let labelMap = context.Transforms.Conversion.MapValueToKey("Label", "Number", keyOrdinality = ValueToKeyMappingEstimator.KeyOrdinality.ByValue)
+let featureMap = context.Transforms.Concatenate("Features", "PixelValues")
+let lambda = 3.f
+
+type CustomLogLoss () = // ported from https://github.com/dotnet/machinelearning/blob/510f0112d4fbb4d3ee233b9ca95c83fae1f9da91/src/Microsoft.ML.Data/Utils/LossFunctions.cs#L128
+    let sigmoid x = 1. / (1. + ((Math.Exp -x)))
+    interface IClassificationLoss with
+        member this.Derivative(output, label) = // gradient
+            let h = sigmoid (double output)
+            if label > 0f then
+                h - 1. |> float32
+            else
+               h |> float32
+
+        member this.Loss(output, label) = // cost
+            let h = sigmoid (double output)
+            if label > 0f then
+                -(log h)
+            else
+                -(log (1. - h)) 
+
+let costFunction = CustomLogLoss() //LogLoss()
+let gradientDescent = context.BinaryClassification.Trainers.SgdNonCalibrated(lossFunction = costFunction, l2Regularization = lambda)
+let oneVsAll = context.MulticlassClassification.Trainers.OneVersusAll gradientDescent
+
+let pipeline = 
+    EstimatorChain()
+        .Append(labelMap)
+        .Append(featureMap)
+        .AppendCacheCheckpoint(context) // cache data to speed up training     
+        .Append(oneVsAll)
+
+let model = trainData |> pipeline.Fit
+
+model.LastTransformer.Model
+
+#!markdown
+
+`MapValueToKey` will take a column from the input data and build a dictionary from it.
+
+In this case, the keys match the labels, as **they are in Value order and are integers**, and so are used directly as output.
+
+If they didn't, for instance if they were arbitrary strings, you **would** need to map them on the way out as well (otherwise you would just get their integer keys).
+
+The `SgdNonCalibrated` trainer implements stochastic gradient descent. It can take optional values for the loss (cost) function, number of iters, starting alpha, lambda etc.
+
+The loss function can be customised but there are many premade such as the [squared difference](https://docs.microsoft.com/en-us/dotnet/api/microsoft.ml.trainers.squaredloss?view=ml-dotnet) and [log difference](https://docs.microsoft.com/en-us/dotnet/api/microsoft.ml.trainers.logloss?view=ml-dotnet), which is used here as per the coursework.
+
+#!fsharp
+
+let transformedTestData = testData |> model.Transform 
+let metrics = transformedTestData |> context.MulticlassClassification.Evaluate
+
+printfn "Evaluation metrics"
+printfn "  MicroAccuracy:    %f" metrics.MicroAccuracy
+printfn "  MacroAccuracy:    %f" metrics.MacroAccuracy
+printfn "  LogLoss:          %f" metrics.LogLoss
+printfn "  LogLossReduction: %f" metrics.LogLossReduction
+
+#!fsharp
+
+metrics.ConfusionMatrix.GetFormattedConfusionTable()
+
+#!fsharp
+
+context.Data.CreateEnumerable<DigitPrediction>(transformedTestData, reuseRowObject = false)
+|> Seq.map (fun d -> $"Predicted {d.PredictedLabel}, Actual {d.Label}, {d.PredictedLabel = d.Label}")
+
+#!fsharp
+
+let randoms = 
+    let r = Random()
+    [ for i in 0..4 do r.Next(0, 499) ]
+    
+let digits = context.Data.CreateEnumerable(testData, reuseRowObject = false) |> Array.ofSeq
+let testDigits = [ digits.[randoms.[0]]; digits.[randoms.[1]]; digits.[randoms.[2]]; digits.[randoms.[3]]; digits.[randoms.[4]] ]
+let engine = context.Model.CreatePredictionEngine model
+let predict digit = engine.Predict digit
+
+printf "  #\t\t"; [0..9] |> Seq.iter(fun i -> printf "%i\t\t" i); printfn ""
+
+testDigits |> Seq.iter(
+    fun digit -> 
+        printf "  %i\t" (int digit.Number)
+        let p = predict digit
+        p.Score |> Seq.iter (fun s -> printf "%f\t" s)
+        printfn "")
