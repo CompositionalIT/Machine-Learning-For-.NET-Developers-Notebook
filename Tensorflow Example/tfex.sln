@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32210.308
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "tfex", "tfex\tfex.fsproj", "{46D87F57-B635-4B89-B176-141A6083149F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{46D87F57-B635-4B89-B176-141A6083149F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46D87F57-B635-4B89-B176-141A6083149F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46D87F57-B635-4B89-B176-141A6083149F}.Debug|x64.ActiveCfg = Debug|x64
+		{46D87F57-B635-4B89-B176-141A6083149F}.Debug|x64.Build.0 = Debug|x64
+		{46D87F57-B635-4B89-B176-141A6083149F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46D87F57-B635-4B89-B176-141A6083149F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{46D87F57-B635-4B89-B176-141A6083149F}.Release|x64.ActiveCfg = Release|x64
+		{46D87F57-B635-4B89-B176-141A6083149F}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A52F0CB1-D0F2-4AEE-BC4A-C6B9AFB8D9B1}
+	EndGlobalSection
+EndGlobal
